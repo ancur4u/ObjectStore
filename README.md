@@ -19,3 +19,7 @@ http://localhost:8081/emptyObjStore
 
 4. cleanup based on a specific key
 http://localhost:8081/emptyObjStore?op=remove&key=familyKey
+
+Tips:
+1. in Store option, if you wan to restrict the key,value option to check for duplicates (should fail if exists), use the configuration "Fail if present -> true"
+Similarly if you want to make flow to fail if there is no value to key(during startup or shutdown), use the configuration "Fail on null value -> true"
