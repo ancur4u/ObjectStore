@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="68e2f1cf-905c-4725-ab4e-3a04131d0119" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<os:config name="ObjectStore_Config" doc:name="ObjectStore Config" doc:id="d0d407a5-7232-4787-a87e-85258759f26d" >
+		<os:connection >
+			<reconnection failsDeployment="true" >
+				<reconnect />
+			</reconnection>
+		</os:connection>
+	</os:config>
+	<os:object-store name="Object_store" doc:name="Object store" doc:id="f51b91c6-5521-4545-9fbb-80a728134a9c" maxEntries="100" entryTtl="60" expirationInterval="60" config-ref="ObjectStore_Config" entryTtlUnit="MINUTES"/>
+	<flow name="objectstoreFlow" doc:id="aa347b41-eed9-4e16-a81e-6d7cfa35013e" >
+		<http:listener doc:name="Listener" doc:id="230c7f91-58dc-4f7b-8f5d-3b6502f74274" config-ref="HTTP_Listener_config" path="/objectstore" allowedMethods="POST"/>
+		<logger level="INFO" doc:name="Logger" doc:id="7ba9029f-d1ac-4aa6-af97-72ac503d1fdb" message="#['Object store flow initiated.']"/>
+		<os:store doc:name="Store" doc:id="7b7c2ea1-42de-487a-813a-8ae055c4679b" key="#[attributes.queryParams.key]" objectStore="Object_store"/>
+		<logger level="INFO" doc:name="Logger" doc:id="a99833b0-850b-4fdb-9e0c-2ca85fce4d38" message="#['Object Store updated successfully !']"/>
+	</flow>
+	<flow name="objectstoreRetrieveFlow" doc:id="daa003ba-946a-4e81-b5d8-93b49e07691e" >
+		<http:listener doc:name="Listener" doc:id="62c4bb12-6565-4c42-8163-e658780696fa" config-ref="HTTP_Listener_config" path="/objStoreOps"/>
+		<logger level="INFO" doc:name="Logger" doc:id="b4562ac7-7e9e-421a-9e51-92145c9abbbd" message="#['objStore Ops flow initiated']"/>
+		<choice doc:name="Choice" doc:id="7d0c4619-0428-45de-95ac-a2bea5b0f2b4" >
+			<when expression="#[attributes.queryParams.op == 'specificRetrieve']">
+				<logger level="INFO" doc:name="Logger" doc:id="fc3ad583-b87f-4f04-91ea-ecf587557a53" message="#['Flow to retrieve specific key invoked']"/>
+				<os:retrieve doc:name="Retrieve" doc:id="62f77197-7e52-45f6-ad92-dde0b068ea10" key="#[attributes.queryParams.key]" objectStore="Object_store"/>
+				<logger level="INFO" doc:name="Logger" doc:id="ed761121-5e28-4a0d-84c8-2f03ae7cbd6a" message="#['SpecificKey retrieval :' ++ payload]"/>
+			</when>
+			<when expression="#[attributes.queryParams.op =='retrieveAll']">
+				<logger level="INFO" doc:name="Logger" doc:id="62ab107a-fbec-4ebf-8a08-22ca88cb2d01" message="#['Retrieve all flow invoked']"/>
+				<os:retrieve-all doc:name="Retrieve all" doc:id="4fa3c96e-85ef-424e-a0e3-a7ec4ab7e061" objectStore="Object_store" target="RetrieveAll"/>
+				<logger level="INFO" doc:name="Logger" doc:id="d5a8e62f-ae74-4205-a307-192298aa2b83" message="Retrieve All : #[vars.RetrieveAll]"/>
+			</when>
+			<when expression="#[attributes.queryParams.op =='retrieveAllKeys']">
+				<logger level="INFO" doc:name="Logger" doc:id="c68a2b9c-8198-47cd-b40c-702207c74848" message="#['Retrieve All Key flow invoked']"/>
+				<os:retrieve-all-keys doc:name="Retrieve all keys" doc:id="35204ce9-2244-46a6-8ef4-c74c20e5ceb0" objectStore="Object_store" target="retrieveAllKeys"/>
+				<logger level="INFO" doc:name="Logger" doc:id="ace549f4-95a7-456e-b29c-90daf7539740" message="'Retrieve all keys: ' #[vars.retrieveAllKeys]"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="40e3467e-35d8-4216-9349-c9bf1b4bacac" />
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="objectstoreCleanUpFlow" doc:id="9bc41cbe-703e-4f4f-ab3f-b15f8dee44c2" >
+		<http:listener doc:name="Listener" doc:id="844d6a4d-32f9-4339-a048-82cbb37c12ca" config-ref="HTTP_Listener_config" path="/emptyObjStore"/>
+		<logger level="INFO" doc:name="Logger" doc:id="59685226-b339-45dc-a7bb-895fefb60595" message="'Operation received: ' #[attributes.queryParams.op]"/>
+		<choice doc:name="Choice" doc:id="ae8ab9dd-d9f2-47d2-9bf6-01ada4b2abfd" >
+			<when expression="#[attributes.queryParams.op == 'remove']">
+				<os:remove doc:name="Remove" doc:id="467347b1-e052-487b-8b4d-5fb71f73e7a5" key="#[attributes.queryParams.key]" objectStore="Object_store"/>
+				<logger level="INFO" doc:name="Logger" doc:id="5c73d48a-311b-4fa1-8470-d589d59a3a71" message="Object store cleaned up for key: #[attributes.queryParams.key]"/>
+			</when>
+			<otherwise >
+				<os:clear doc:name="Clear" doc:id="776cd198-2d5b-4d51-b490-ff6be61ebcb1" objectStore="Object_store"/>
+				<logger level="INFO" doc:name="Logger" doc:id="cfb8c4e9-21ba-4371-ad33-83780867eb69" message="#['Object store wiped.']"/>
+			</otherwise>
+		</choice>
+	</flow>
+</mule>
